@@ -1,0 +1,77 @@
+library(readr)
+library(readxl)
+library(dplyr)
+ds_sample<-read_excel('wastewater sample-xlsx')
+ds_blank<-read_excel('blank sample-xlsx')
+ds_db<-read_excel('Database.xlsx',col_types=c('m'='numeric'))
+ds_sample$`m/z`
+sum(!(ds_sample$`Area (Max.)`>5*10^5)) #all > 5e+5
+sum(!(ds_blank$`Area (Max.)`>5*10^5)) #all > 5e+5
+ds_sample['containedindb']=NA
+for(i in 1:nrow(ds_db)){print(i)
+ds_sample[between(ds_sample$`m/z`,ds_db$lowv[i],ds_db$highv[i]),'containedindb']<-ds_db$m[i]}
+sum(!is.na(ds_sample$containedindb))
+ds_sample<-ds_sample[!is.na(ds_sample$containedindb),]
+ds_blank['containedindb']=NA
+for(i in 1:nrow(ds_db)){print(i)
+ds_blank[between(ds_blank$`m/z`,ds_db$lowv[i],ds_db$highv[i]),'containedindb']<-ds_db$m[i]}
+sum(!is.na(ds_blank$containedindb))
+ds_blank<-ds_blank[!is.na(ds_blank$containedindb),]
+length(unique(ds_sample$containedindb))
+ds_db['detectedinsample']<-NA
+ds_db['detectedinblank']<-NA
+ds_db[ds_db$m %in% ds_sample$containedindb,'detectedinsample']<-1
+ds_db[ds_db$m %in% ds_blank$containedindb,'detectedinblank']<-1
+A_db<-ds_db[(ds_db$detectedinsample%in%c(1)) & is.na(ds_db$detectedinblank),]
+# write_csv(A_db,'A_db.csv')
+write_csv(ds_sample[ds_sample$containedindb %in% A_db$m,],'A_org.csv')
+####processing sample####
+ds_sample_maxArea<-
+ds_sample%>%
+group_by(containedindb)%>%
+summarise(
+n=n(),
+Area (Max.)`=max(`Area (Max.)`))
+i=1
+for(i in 1:length(ds_sample_maxArea$containedindb)){
+print(i)
+mz=ds_sample_maxArea$containedindb[i]
+area=ds_sample_maxArea$`Area (Max.)`[i]
+ds_sample_i<-ds_sample[ds_sample$containedindb%in%c(mz) & ds_sample$`Area (Max.)` %in% c(area),]
+if(i==1){ds_sample_selected<-ds_sample_i}else{ds_sample_selected<-rbind(ds_sample_selected,ds_sample_i) }}
+####processing blank####
+ds_blank_maxArea<-
+ds_blank%>%
+group_by(containedindb)%>%
+summarise(
+n=n(),
+`Area (Max.)`=max(`Area (Max.)`)) i=1
+for (i in 1:length(ds_blank_maxArea$containedindb)){
+print(i)
+mz=ds_blank_maxArea$containedindb[i]
+area=ds_blank_maxArea$`Area (Max.)`[i]
+ds_blank_i<-ds_blank[ds_blank$containedindb%in%c(mz) & ds_blank$`Area (Max.)` %in% c(area),]
+ if(i==1){ ds_blank_selected<-ds_blank_i  }else{
+ ds_blank_selected<-rbind(ds_blank_selected,ds_blank_i)}}
+A<-ds_sample_selected%>%
+filter(!(containedindb %in% ds_blank_selected$containedindb))
+write_csv(A,'A.csv')
+ds_both_rt<-inner_join(ds_sample_selected,ds_blank_selected,by='containedindb')
+ds_both_rt<-  ds_both_rt%>%mutate(  rt_diff=abs(`RT [min].x`-`RT [min].y`),
+area_diff=`Area (Max.).x`/`Area (Max.).y`)
+B<-ds_sample_selected %>%
+filter(containedindb %in% ds_both_rt[ds_both_rt$rt_diff>=0.2,]$containedindb)
+write_csv(B,'B.csv')
+C<-ds_sample_selected %>%
+filter((containedindb %in% ds_both_rt[ds_both_rt$rt_diff<0.2,]$containedindb) &
+          (containedindb %in% ds_both_rt[ds_both_rt$area_diff>10,]$containedindb) )
+write_csv(C,'C.csv')
+ds_sample[ds_sample$containedindb == ds_sample$containedindb[3],]%>%View()
+?inner_join
+# ds_db['lt02']<-NA
+# ds_db['st02']<-NA
+ds_db[ds_db$m %in% ds_sample[ds_sample$`RT [min]`>0.2,]$containedindb,'lt02']<-1
+ds_db[ds_db$m %in% ds_sample[ds_sample$`RT [min]`<=0.2,]$containedindb,'lt02']<-0B_db<-ds_db[(ds_db$detectedinsample%in%c(1)) & (ds_db$detectedinblank%in%c(1)) & (ds_db$lt02%in%c(1)),]
+write_csv(B_db, 'B_db.csv')
+write_csv(ds_sample[ds_sample$containedindb %in% 
+B_db$m,],  'B.csv')
